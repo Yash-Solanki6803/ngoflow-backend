@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
 import {
   IsEmail,
   IsEnum,
@@ -6,6 +6,7 @@ import {
   IsString,
   MinLength,
 } from 'class-validator';
+import { NGO } from 'src/ngos/entities/ngo.entity';
 
 export enum UserRole {
   VOLUNTEER = 'volunteer',
@@ -36,4 +37,7 @@ export class User {
   @Column({ type: 'enum', enum: UserRole, default: UserRole.VOLUNTEER })
   @IsEnum(UserRole)
   role: UserRole;
+
+  @OneToMany(() => NGO, (ngo) => ngo.user)
+  ngos: NGO[];
 }

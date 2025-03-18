@@ -41,7 +41,10 @@ export class JwtAuthMiddleware implements NestMiddleware {
       req.user = user || null;
     } catch (error) {
       // Token expired or invalid
-      req.user = null;
+      // req.user = null;
+      return res
+        .status(401)
+        .json({ message: 'Token expired. Please log in again.' });
     }
 
     next();

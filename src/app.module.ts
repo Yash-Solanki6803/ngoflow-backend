@@ -3,9 +3,13 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
+import { NgosModule } from './ngos/ngos.module';
 
 import databaseConfig from './config/database.config';
 import jwtConfig from './config/jwt.config';
+import { APP_GUARD } from '@nestjs/core';
+import { PublicGuard } from './common/guards/public.guard';
+import { RolesGuard } from './common/guards/roles.guard';
 
 @Module({
   imports: [
@@ -31,6 +35,17 @@ import jwtConfig from './config/jwt.config';
     }),
     UsersModule,
     AuthModule,
+    NgosModule,
+  ],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: PublicGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: RolesGuard,
+    },
   ],
 })
 export class AppModule {}
