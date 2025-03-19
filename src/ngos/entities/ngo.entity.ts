@@ -5,8 +5,10 @@ import {
   ManyToOne,
   CreateDateColumn,
   UpdateDateColumn,
+  OneToMany,
 } from 'typeorm';
 import { User } from 'src/users/entities/user.entity';
+import { Campaign } from 'src/campaigns/entities/campaign.entity';
 
 export enum NGOStatus {
   PENDING = 'pending',
@@ -45,8 +47,11 @@ export class NGO {
   @Column({ type: 'enum', enum: NGOStatus, default: NGOStatus.PENDING })
   status: NGOStatus;
 
-  @ManyToOne(() => User, (user) => user.ngos, { eager: true })
+  @ManyToOne(() => User, (user) => user.ngos)
   user: User;
+
+  @OneToMany(() => Campaign, (campaign) => campaign.ngo)
+  campaigns: Campaign[];
 
   @CreateDateColumn()
   createdAt: Date;

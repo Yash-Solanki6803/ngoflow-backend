@@ -1,4 +1,10 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  OneToMany,
+  ManyToMany,
+} from 'typeorm';
 import {
   IsEmail,
   IsEnum,
@@ -7,6 +13,7 @@ import {
   MinLength,
 } from 'class-validator';
 import { NGO } from 'src/ngos/entities/ngo.entity';
+import { Campaign } from 'src/campaigns/entities/campaign.entity';
 
 export enum UserRole {
   VOLUNTEER = 'volunteer',
@@ -40,4 +47,7 @@ export class User {
 
   @OneToMany(() => NGO, (ngo) => ngo.user)
   ngos: NGO[];
+
+  @ManyToMany(() => Campaign, (campaign) => campaign.volunteers)
+  campaigns: Campaign[];
 }

@@ -10,6 +10,7 @@ import jwtConfig from './config/jwt.config';
 import { APP_GUARD } from '@nestjs/core';
 import { PublicGuard } from './common/guards/public.guard';
 import { RolesGuard } from './common/guards/roles.guard';
+import { CampaignsModule } from './campaigns/campaigns.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     UsersModule,
     AuthModule,
     NgosModule,
+    CampaignsModule,
   ],
   providers: [
     {
