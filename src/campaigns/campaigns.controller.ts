@@ -29,11 +29,15 @@ export class CampaignsController {
 
   @Get()
   @Public()
-  getCampaigns(@Query('ngoId') ngoId?: string) {
+  getCampaigns(
+    @Query('ngoId') ngoId?: string,
+    @Query('search') search?: string,
+    @Query('location') location?: string,
+  ) {
     if (ngoId) {
       return this.campaignsService.getCampaignsByNGO(ngoId);
     }
-    return this.campaignsService.getAllCampaigns();
+    return this.campaignsService.getAllCampaigns(search, location);
   }
 
   // Get user's registered campaigns

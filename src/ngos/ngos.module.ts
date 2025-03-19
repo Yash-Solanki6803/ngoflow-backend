@@ -4,9 +4,10 @@ import { NgosController } from './ngos.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { NGO } from './entities/ngo.entity';
 import { User } from 'src/users/entities/user.entity';
+import { Campaign } from 'src/campaigns/entities/campaign.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([NGO, User])],
+  imports: [TypeOrmModule.forFeature([NGO, User, Campaign])],
   controllers: [NgosController],
   providers: [NgosService],
 })

@@ -8,7 +8,7 @@ import { CreateCampaignDto } from './dto/create-campaign.dto';
 import { UpdateCampaignDto } from './dto/update-campaign.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Campaign } from './entities/campaign.entity';
-import { Repository } from 'typeorm';
+import { FindOptionsWhere, ILike, Repository } from 'typeorm';
 import { User, UserRole } from 'src/users/entities/user.entity';
 import { NGO, NGOStatus } from 'src/ngos/entities/ngo.entity';
 
@@ -53,15 +53,22 @@ export class CampaignsService {
   }
 
   // Get all campaigns (Public)
-  async getAllCampaigns() {
+  async getAllCampaigns(search?: string, location?: string) {
+    const filters: FindOptionsWhere<Campaign> | FindOptionsWhere<Campaign>[] = {
+      title: search ? ILike(`%${search}%`) : undefined,
+      ...(location ? { ngo: { location: ILike(`%${location}%`) } } : {}),
+    };
+
     return this.campaignRepository.find({
       relations: {
         ngo: true,
       },
+      where: filters,
       select: {
         ngo: {
           id: true,
           name: true,
+          location: true,
         },
       },
       order: { updatedAt: 'DESC' },
@@ -165,6 +172,12 @@ export class CampaignsService {
 
     if (campaign.ngo.user.id !== user.id) {
       throw new ForbiddenException('You can only delete your own campaigns');
+    }
+
+    // Remove all volunteers from the campaign
+    if (campaign.volunteers.length > 0) {
+      campaign.volunteers = [];
+      await this.campaignRepository.save(campaign);
     }
 
     await this.campaignRepository.remove(campaign);
