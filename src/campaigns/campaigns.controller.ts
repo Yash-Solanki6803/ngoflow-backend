@@ -33,11 +33,16 @@ export class CampaignsController {
     @Query('ngoId') ngoId?: string,
     @Query('search') search?: string,
     @Query('location') location?: string,
+    @Query('categories') categories?: string, //1,2,3
   ) {
+    const categoryIds = categories
+      ? categories.split(',').map((id) => Number(id))
+      : [];
+
     if (ngoId) {
       return this.campaignsService.getCampaignsByNGO(ngoId);
     }
-    return this.campaignsService.getAllCampaigns(search, location);
+    return this.campaignsService.getAllCampaigns(search, location, categoryIds);
   }
 
   // Get user's registered campaigns

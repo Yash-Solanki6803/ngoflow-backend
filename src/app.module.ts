@@ -11,6 +11,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { PublicGuard } from './common/guards/public.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { CampaignsModule } from './campaigns/campaigns.module';
+import { CategoriesModule } from './categories/categories.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { CampaignsModule } from './campaigns/campaigns.module';
     AuthModule,
     NgosModule,
     CampaignsModule,
+    CategoriesModule,
   ],
   providers: [
     {

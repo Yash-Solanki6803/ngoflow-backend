@@ -4,6 +4,7 @@ import {
   Column,
   OneToMany,
   ManyToMany,
+  JoinTable,
 } from 'typeorm';
 import {
   IsEmail,
@@ -14,6 +15,8 @@ import {
 } from 'class-validator';
 import { NGO } from 'src/ngos/entities/ngo.entity';
 import { Campaign } from 'src/campaigns/entities/campaign.entity';
+import { Category } from 'src/categories/entities/category.entity';
+import { Subcategory } from 'src/categories/entities/subcategory.entity';
 
 export enum UserRole {
   VOLUNTEER = 'volunteer',
@@ -50,4 +53,15 @@ export class User {
 
   @ManyToMany(() => Campaign, (campaign) => campaign.volunteers)
   campaigns: Campaign[];
+
+  @ManyToMany(() => Category, (category) => category.users)
+  @JoinTable()
+  interestedCategories: Category[];
+
+  @ManyToMany(() => Subcategory, (subcategory) => subcategory.users)
+  @JoinTable()
+  interestedSubcategories: Subcategory[];
+
+  @Column({ type: 'timestamp', nullable: true })
+  lastInterestUpdate: Date;
 }

@@ -2,15 +2,16 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
 import { CreateNGODto } from './dto/create-ngo.dto';
-import { UpdateNgoDto } from './dto/update-ngo.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { NGO, NGOAction, NGOStatus } from './entities/ngo.entity';
 import { Repository } from 'typeorm';
 import { User, UserRole } from 'src/users/entities/user.entity';
 import { Campaign } from 'src/campaigns/entities/campaign.entity';
+import { Category } from 'src/categories/entities/category.entity';
 
 @Injectable()
 export class NgosService {
@@ -21,9 +22,11 @@ export class NgosService {
     private readonly campaignRepository: Repository<Campaign>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(Category)
+    private readonly categoryRepository: Repository<Category>,
   ) {}
 
-  // Apply for an NGO (Volunteer only)
+  // Create a new NGO application
   async applyForNGO(
     userId: number | undefined,
     createNGODto: CreateNGODto,
@@ -51,9 +54,31 @@ export class NgosService {
       );
     }
 
+    // Fetch and validate category
+    const category = await this.categoryRepository.findOne({
+      where: { id: createNGODto.categoryId },
+    });
+
+    if (!category) {
+      throw new NotFoundException('Category not found.');
+    }
+
     // Create a new NGO application
-    const ngo = this.ngoRepository.create({ ...createNGODto, user });
-    return this.ngoRepository.save(ngo);
+    const ngo = this.ngoRepository.create({
+      ...createNGODto,
+      user,
+      category, // Assign category
+    });
+
+    try {
+      return await this.ngoRepository.save(ngo);
+    } catch (error) {
+      if (error.code === '23505') {
+        // PostgreSQL unique constraint violation
+        throw new BadRequestException('An NGO with this name already exists.');
+      }
+      throw new InternalServerErrorException('An unexpected error occurred.');
+    }
   }
 
   // Get all NGO applications for a user
@@ -145,6 +170,9 @@ export class NgosService {
     // Find the approved NGO for this user
     const approvedNgo = await this.ngoRepository.findOne({
       where: { user: { id: userId }, status: NGOStatus.APPROVED },
+      relations: {
+        category: true,
+      },
     });
 
     if (!approvedNgo)
@@ -180,34 +208,51 @@ export class NgosService {
       throw new BadRequestException('Invalid user ID');
     }
 
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new ForbiddenException('Only logged in users can delete NGOs');
+    }
+
     const ngo = await this.ngoRepository.findOne({
-      where: { id: ngoId, user: { id: userId } },
-      relations: ['campaigns'],
+      where: { id: ngoId },
+      relations: ['user', 'campaigns'],
     });
 
     if (!ngo) {
       throw new NotFoundException('NGO not found');
     }
 
+    // Only allow dev users OR the NGO owner to delete
+    if (user.role !== UserRole.DEV && ngo.user.id !== user.id) {
+      throw new ForbiddenException('You can only delete your own NGO');
+    }
+
     if (ngo.status !== NGOStatus.APPROVED) {
       throw new ForbiddenException('Only approved NGOs can be deleted');
     }
 
-    // Loop through each campaign and remove all volunteers from it
+    // Remove volunteers & subcategories from each campaign
     for (const campaign of ngo.campaigns) {
-      if (campaign.volunteers.length > 0) {
-        campaign.volunteers = [];
-        await this.campaignRepository.save(campaign);
-      }
+      campaign.volunteers = [];
+      campaign.subcategories = [];
+      await this.campaignRepository.save(campaign);
     }
 
-    // Delete all related campaigns (which will auto-delete registrations due to cascade)
+    // Delete all campaigns under the NGO
     if (ngo.campaigns.length > 0) {
       await this.campaignRepository.remove(ngo.campaigns);
     }
 
     // Delete the NGO
     await this.ngoRepository.remove(ngo);
+
+    // Change the role of the user back to volunteer if he is not a dev
+    if (user.role !== UserRole.DEV)
+      await this.userRepository.update(user.id, { role: UserRole.VOLUNTEER });
+
     return { message: 'NGO and all related campaigns deleted successfully' };
   }
 }

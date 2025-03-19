@@ -1,4 +1,4 @@
-import { IsEmail, IsNotEmpty, IsString, Length } from 'class-validator';
+import { IsEmail, IsInt, IsNotEmpty, IsString, Length } from 'class-validator';
 
 export class CreateNGODto {
   @IsString()
@@ -14,6 +14,9 @@ export class CreateNGODto {
   @IsString()
   @IsNotEmpty()
   mission: string;
+
+  @IsInt()
+  categoryId: number;
 
   @IsString()
   @IsNotEmpty()

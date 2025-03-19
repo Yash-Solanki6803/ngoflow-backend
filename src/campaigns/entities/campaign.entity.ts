@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { NGO } from 'src/ngos/entities/ngo.entity';
 import { User } from 'src/users/entities/user.entity';
+import { Subcategory } from 'src/categories/entities/subcategory.entity';
 
 @Entity('campaigns')
 export class Campaign {
@@ -27,6 +28,10 @@ export class Campaign {
 
   @Column({ type: 'date' })
   endDate: Date;
+
+  @ManyToMany(() => Subcategory, (subcategory) => subcategory.campaigns)
+  @JoinTable()
+  subcategories: Subcategory[];
 
   @ManyToOne(() => NGO, (ngo) => ngo.campaigns, { onDelete: 'CASCADE' })
   ngo: NGO;

@@ -3,6 +3,8 @@ import {
   IsOptional,
   IsNotEmpty,
   IsDateString,
+  IsArray,
+  ArrayNotEmpty,
 } from 'class-validator';
 
 export class CreateCampaignDto {
@@ -25,4 +27,8 @@ export class CreateCampaignDto {
   @IsString()
   @IsOptional()
   location?: string;
+
+  @IsArray()
+  @ArrayNotEmpty()
+  subcategoryIds: number[];
 }

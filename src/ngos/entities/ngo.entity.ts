@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 import { User } from 'src/users/entities/user.entity';
 import { Campaign } from 'src/campaigns/entities/campaign.entity';
+import { Category } from 'src/categories/entities/category.entity';
 
 export enum NGOStatus {
   PENDING = 'pending',
@@ -46,6 +47,11 @@ export class NGO {
 
   @Column({ type: 'enum', enum: NGOStatus, default: NGOStatus.PENDING })
   status: NGOStatus;
+
+  @ManyToOne(() => Category, (category) => category.ngos, {
+    onDelete: 'SET NULL',
+  })
+  category: Category;
 
   @ManyToOne(() => User, (user) => user.ngos)
   user: User;

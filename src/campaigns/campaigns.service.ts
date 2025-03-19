@@ -8,9 +8,10 @@ import { CreateCampaignDto } from './dto/create-campaign.dto';
 import { UpdateCampaignDto } from './dto/update-campaign.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Campaign } from './entities/campaign.entity';
-import { FindOptionsWhere, ILike, Repository } from 'typeorm';
+import { FindOptionsWhere, ILike, In, Repository } from 'typeorm';
 import { User, UserRole } from 'src/users/entities/user.entity';
 import { NGO, NGOStatus } from 'src/ngos/entities/ngo.entity';
+import { Subcategory } from 'src/categories/entities/subcategory.entity';
 
 @Injectable()
 export class CampaignsService {
@@ -21,6 +22,9 @@ export class CampaignsService {
     private readonly ngoRepository: Repository<NGO>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+
+    @InjectRepository(Subcategory)
+    private readonly subcategoryRepository: Repository<Subcategory>,
   ) {}
 
   // Create a campaign (NGO only)
@@ -41,7 +45,20 @@ export class CampaignsService {
       throw new BadRequestException('You do not have an approved NGO');
     }
 
-    const campaign = this.campaignRepository.create({ ...dto, ngo });
+    // Fetch subcategories
+    const subcategories = await this.subcategoryRepository.find({
+      where: { id: In(dto.subcategoryIds) },
+    });
+
+    if (subcategories.length !== dto.subcategoryIds.length) {
+      throw new BadRequestException('Some subcategories do not exist.');
+    }
+
+    const campaign = this.campaignRepository.create({
+      ...dto,
+      ngo,
+      subcategories,
+    });
     await this.campaignRepository.save(campaign);
 
     return {
@@ -53,22 +70,36 @@ export class CampaignsService {
   }
 
   // Get all campaigns (Public)
-  async getAllCampaigns(search?: string, location?: string) {
+  async getAllCampaigns(
+    search?: string,
+    location?: string,
+    categoryIds: number[] = [],
+  ) {
     const filters: FindOptionsWhere<Campaign> | FindOptionsWhere<Campaign>[] = {
       title: search ? ILike(`%${search}%`) : undefined,
       ...(location ? { ngo: { location: ILike(`%${location}%`) } } : {}),
+      ...(categoryIds.length > 0
+        ? { ngo: { category: { id: In(categoryIds) } } }
+        : {}),
     };
 
     return this.campaignRepository.find({
       relations: {
-        ngo: true,
+        ngo: { category: true },
       },
       where: filters,
       select: {
+        id: true,
+        title: true,
+        description: true,
         ngo: {
           id: true,
           name: true,
           location: true,
+          category: {
+            id: true,
+            name: true,
+          },
         },
       },
       order: { updatedAt: 'DESC' },
@@ -98,6 +129,7 @@ export class CampaignsService {
     return campaigns;
   }
 
+  // Get a single campaign (Public)
   async getSingleCampaign(campaignId: string) {
     const campaign = await this.campaignRepository.findOne({
       where: { id: campaignId },
@@ -134,7 +166,11 @@ export class CampaignsService {
 
     const campaign = await this.campaignRepository.findOne({
       where: { id: campaignId },
-      relations: ['ngo'],
+      relations: {
+        ngo: {
+          user: true,
+        },
+      },
     });
 
     if (!campaign) {
@@ -143,6 +179,19 @@ export class CampaignsService {
 
     if (campaign.ngo.user.id !== user.id) {
       throw new ForbiddenException('You can only update your own campaigns');
+    }
+
+    // Fetch subcategories
+    if (dto.subcategoryIds) {
+      const subcategories = await this.subcategoryRepository.find({
+        where: { id: In(dto.subcategoryIds) },
+      });
+
+      if (subcategories.length !== dto.subcategoryIds.length) {
+        throw new BadRequestException('Some subcategories do not exist.');
+      }
+
+      campaign.subcategories = subcategories;
     }
 
     Object.assign(campaign, dto);
@@ -154,7 +203,7 @@ export class CampaignsService {
   // Delete a campaign (NGO only)
   async deleteCampaign(user: User | null, campaignId: string) {
     if (!user) {
-      throw new ForbiddenException('Only logged in users can delete campaigns');
+      throw new ForbiddenException('Only logged-in users can delete campaigns');
     }
 
     const campaign = await this.campaignRepository.findOne({
@@ -163,6 +212,8 @@ export class CampaignsService {
         ngo: {
           user: true,
         },
+        volunteers: true,
+        subcategories: true, // Load subcategories relation
       },
     });
 
@@ -180,7 +231,15 @@ export class CampaignsService {
       await this.campaignRepository.save(campaign);
     }
 
+    // Remove all subcategory relations
+    if (campaign.subcategories.length > 0) {
+      campaign.subcategories = [];
+      await this.campaignRepository.save(campaign);
+    }
+
+    // Now safely remove the campaign
     await this.campaignRepository.remove(campaign);
+
     return { message: 'Campaign deleted successfully' };
   }
 
@@ -188,7 +247,7 @@ export class CampaignsService {
   async registerForCampaign(user: User | null, campaignId: string) {
     if (!user) {
       throw new ForbiddenException(
-        'Only logged in users can register for campaigns',
+        'Only logged-in users can register for campaigns',
       );
     }
 
@@ -200,7 +259,13 @@ export class CampaignsService {
 
     const campaign = await this.campaignRepository.findOne({
       where: { id: campaignId },
-      relations: ['volunteers'],
+      relations: {
+        volunteers: true,
+        subcategories: true, // Load subcategories relation
+        ngo: {
+          category: true, // Load NGO category relation
+        },
+      },
     });
 
     if (!campaign) {
@@ -213,6 +278,45 @@ export class CampaignsService {
       );
     }
 
+    // Load volunteer's interested categories & subcategories
+    const volunteer = await this.userRepository.findOne({
+      where: { id: user.id },
+      relations: {
+        interestedCategories: true,
+        interestedSubcategories: true,
+      },
+    });
+
+    if (!volunteer) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Get category & subcategory IDs
+    const volunteerCategoryIds = volunteer.interestedCategories.map(
+      (c) => c.id,
+    );
+    const volunteerSubcategoryIds = volunteer.interestedSubcategories.map(
+      (s) => s.id,
+    );
+
+    const campaignSubcategoryIds = campaign.subcategories.map((s) => s.id);
+    const ngoCategoryId = campaign.ngo.category?.id; // NGO category
+
+    // Check for common categories or subcategories
+    const hasCommonCategory =
+      ngoCategoryId && volunteerCategoryIds.includes(ngoCategoryId);
+
+    const hasCommonSubcategory = campaignSubcategoryIds.some((id) =>
+      volunteerSubcategoryIds.includes(id),
+    );
+
+    if (!hasCommonCategory && !hasCommonSubcategory) {
+      throw new ForbiddenException(
+        'You can only register for campaigns that match your interests',
+      );
+    }
+
+    // Register the volunteer
     campaign.volunteers.push(user);
     await this.campaignRepository.save(campaign);
 
