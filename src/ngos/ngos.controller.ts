@@ -65,6 +65,11 @@ export class NgosController {
     return this.ngosService.toggleFollowNGO(req.user?.id, ngoId);
   }
 
+  @Get(':ngoId/followers')
+  async getFollowers(@Param('ngoId') ngoId: string) {
+    return this.ngosService.getNGOFollowers(ngoId);
+  }
+
   // Delete an NGO Application (Only if pending)
   @Roles([UserRole.VOLUNTEER])
   @Delete('applications/:id')

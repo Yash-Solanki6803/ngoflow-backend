@@ -9,7 +9,7 @@ import { Category } from 'src/categories/entities/category.entity';
 import { In, Repository } from 'typeorm';
 import { Subcategory } from 'src/categories/entities/subcategory.entity';
 import { UpdateInterestsDto } from './dto/update-interests.dto';
-import { User } from './entities/user.entity';
+import { User, UserRole } from './entities/user.entity';
 
 @Injectable()
 export class UsersService {
@@ -23,9 +23,13 @@ export class UsersService {
   ) {}
 
   async setUserInterests(
-    userId: number,
     updateInterestsDto: UpdateInterestsDto,
+    userId?: number,
   ) {
+    if (!userId) {
+      throw new BadRequestException('User not found.');
+    }
+
     const user = await this.userRepository.findOne({ where: { id: userId } });
 
     if (!user) throw new NotFoundException('User not found.');
@@ -50,9 +54,12 @@ export class UsersService {
   }
 
   async updateUserInterests(
-    userId: number,
     updateInterestsDto: UpdateInterestsDto,
+    userId?: number,
   ) {
+    if (!userId) {
+      throw new BadRequestException('User not found.');
+    }
     const user = await this.userRepository.findOne({ where: { id: userId } });
 
     if (!user) throw new NotFoundException('User not found.');
@@ -82,5 +89,23 @@ export class UsersService {
 
     await this.userRepository.save(user);
     return { message: 'User interests updated successfully.' };
+  }
+
+  // Get followed NGOs of a user (Only ID & Name)
+  async getUserFollowedNGOs(userId?: number) {
+    // Find the user and check their role
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['followedNGOs'], // Load followed NGOs
+    });
+
+    if (!user) throw new NotFoundException('User not found');
+
+    // Ensure the user is a volunteer
+    if (user.role !== UserRole.VOLUNTEER)
+      throw new ForbiddenException('Only volunteers can follow NGOs');
+
+    // Map only necessary fields (id, name)
+    return user.followedNGOs.map(({ id, name }) => ({ id, name }));
   }
 }

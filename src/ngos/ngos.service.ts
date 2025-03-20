@@ -303,6 +303,21 @@ export class NgosService {
     return { message: 'Followed the NGO successfully', following: true };
   }
 
+  // Get followers of an NGO (Only ID & Name)
+  async getNGOFollowers(ngoId: string) {
+    // Find the NGO and load followers
+    const ngo = await this.ngoRepository.findOne({
+      where: { id: ngoId },
+      relations: ['followers'], // Load followers
+      select: { id: true }, // Only need the NGO ID
+    });
+
+    if (!ngo) throw new NotFoundException('NGO not found');
+
+    // Map only necessary fields (id, name)
+    return ngo.followers.map(({ id, name }) => ({ id, name }));
+  }
+
   // Get NGO by ID
   async getNgoById(ngoId: string) {
     const ngo = await this.ngoRepository

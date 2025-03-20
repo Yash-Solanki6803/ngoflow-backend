@@ -5,10 +5,14 @@ import {
   Post,
   Body,
   UseGuards,
-  Request,
+  Req,
+  Get,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { UpdateInterestsDto } from './dto/update-interests.dto';
+import { Roles } from 'src/common/decorators/roles.decorator';
+import { UserRole } from './entities/user.entity';
+import { Request } from 'express';
 
 @Controller('users')
 export class UsersController {
@@ -16,20 +20,26 @@ export class UsersController {
 
   @Post('interests')
   async setUserInterests(
-    @Request() req,
+    @Req() req: Request,
     @Body() updateInterestsDto: UpdateInterestsDto,
   ) {
-    return this.usersService.setUserInterests(req.user.id, updateInterestsDto);
+    return this.usersService.setUserInterests(updateInterestsDto, req.user?.id);
   }
 
   @Patch('interests')
   async updateUserInterests(
-    @Request() req,
+    @Req() req: Request,
     @Body() updateInterestsDto: UpdateInterestsDto,
   ) {
     return this.usersService.updateUserInterests(
-      req.user.id,
       updateInterestsDto,
+      req.user?.id,
     );
+  }
+
+  @Get('followed-ngos')
+  @Roles([UserRole.VOLUNTEER])
+  async getFollowedNGOs(@Req() req: Request) {
+    return this.usersService.getUserFollowedNGOs(req.user?.id);
   }
 }
