@@ -8,6 +8,7 @@ import {
   Param,
   Req,
   Query,
+  Patch,
 } from '@nestjs/common';
 import { CampaignsService } from './campaigns.service';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
@@ -76,33 +77,39 @@ export class CampaignsController {
     return this.campaignsService.getSingleCampaign(campaignId);
   }
 
-  @Put('/:id')
+  @Put('/:campaignId')
   @Roles([UserRole.NGO])
   updateCampaign(
     @Req() req: Request,
-    @Param('id') id: string,
+    @Param('campaignId') id: string,
     @Body() dto: UpdateCampaignDto,
   ) {
     return this.campaignsService.updateCampaign(req.user, id, dto);
   }
 
-  @Delete('/:id')
+  @Patch(':campaignId/toggle-like')
+  @Roles([UserRole.VOLUNTEER])
+  likeCampaign(@Req() req: Request, @Param('campaignId') campaignId: string) {
+    return this.campaignsService.toggleLikeCampaign(req.user?.id, campaignId);
+  }
+
+  @Delete('/:campaignId')
   @Roles([UserRole.NGO])
-  deleteCampaign(@Req() req: Request, @Param('id') id: string) {
+  deleteCampaign(@Req() req: Request, @Param('campaignId') id: string) {
     return this.campaignsService.deleteCampaign(req.user, id);
   }
 
   // Register to a campaign as volunteer
-  @Post('/:id/register')
+  @Post('/:campaignId/register')
   @Roles([UserRole.VOLUNTEER])
-  registerToCampaign(@Req() req: Request, @Param('id') id: string) {
+  registerToCampaign(@Req() req: Request, @Param('campaignId') id: string) {
     return this.campaignsService.registerForCampaign(req.user, id);
   }
 
   // Unregister from a campaign as volunteer
-  @Delete('/:id/register')
+  @Delete('/:campaignId/register')
   @Roles([UserRole.VOLUNTEER])
-  unregisterFromCampaign(@Req() req: Request, @Param('id') id: string) {
+  unregisterFromCampaign(@Req() req: Request, @Param('campaignId') id: string) {
     return this.campaignsService.unregisterFromCampaign(req.user, id);
   }
 }

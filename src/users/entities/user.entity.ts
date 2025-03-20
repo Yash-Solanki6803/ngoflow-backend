@@ -62,6 +62,16 @@ export class User {
   @JoinTable()
   interestedSubcategories: Subcategory[];
 
+  @ManyToMany(() => NGO, (ngo) => ngo.followers)
+  @JoinTable()
+  followedNGOs: NGO[];
+
+  @ManyToMany(() => Campaign, (campaign) => campaign.likedBy, {
+    cascade: true,
+  })
+  @JoinTable()
+  likedCampaigns: Campaign[];
+
   @Column({ type: 'timestamp', nullable: true })
   lastInterestUpdate: Date;
 }

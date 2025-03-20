@@ -120,29 +120,65 @@ export class NgosService {
   ): Promise<{ message: string }> {
     const ngoApplication = await this.ngoRepository.findOne({
       where: { id: ngoId },
-      relations: ['user'], // Fetch related user entity
+      relations: {
+        user: {
+          campaigns: true,
+          followedNGOs: true,
+          interestedCategories: true,
+          interestedSubcategories: true,
+        },
+      },
     });
 
-    if (!ngoApplication)
+    if (!ngoApplication) {
       throw new NotFoundException('NGO application not found');
+    }
 
+    console.log(ngoApplication);
     if (ngoApplication.status !== NGOStatus.PENDING) {
       throw new BadRequestException(
         'Only pending applications can be reviewed',
       );
     }
 
+    const user = ngoApplication.user;
+
     if (action === NGOAction.APPROVE) {
       // Approve the application
       ngoApplication.status = NGOStatus.APPROVED;
       await this.ngoRepository.save(ngoApplication);
 
-      // Update user role to 'ngo'
+      // Remove all volunteer-related data before changing role
+      await this.userRepository
+        .createQueryBuilder()
+        .relation(User, 'followedNGOs')
+        .of(ngoApplication.user.id)
+        .remove(user.campaigns); // Remove all followed NGOs
+
+      await this.userRepository
+        .createQueryBuilder()
+        .relation(User, 'campaigns')
+        .of(ngoApplication.user.id)
+        .remove(user.campaigns); // Remove all registered campaigns
+
+      await this.userRepository
+        .createQueryBuilder()
+        .relation(User, 'interestedCategories')
+        .of(ngoApplication.user.id)
+        .remove(user.interestedCategories); // Remove all interested categories
+
+      await this.userRepository
+        .createQueryBuilder()
+        .relation(User, 'interestedSubcategories')
+        .of(ngoApplication.user.id)
+        .remove(user.interestedSubcategories); // Remove all interested subcategories
+
+      // Update user role to NGO
       await this.userRepository.update(ngoApplication.user.id, {
         role: UserRole.NGO,
       });
 
-      // Reject all other applications from the same user
+      // Reject all other pending applications from the same user
       await this.ngoRepository.update(
         { user: { id: ngoApplication.user.id }, status: NGOStatus.PENDING },
         { status: NGOStatus.REJECTED },
@@ -179,6 +215,106 @@ export class NgosService {
       throw new NotFoundException('No approved NGO found for this user');
 
     return approvedNgo;
+  }
+
+  async toggleFollowNGO(userId: number | undefined, ngoId: string) {
+    if (!userId) {
+      throw new BadRequestException('Invalid user ID');
+    }
+
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new ForbiddenException('Only logged in users can follow NGOs');
+    }
+
+    if (user.role !== UserRole.VOLUNTEER) {
+      throw new ForbiddenException('Only volunteers can follow NGOs');
+    }
+
+    const ngo = await this.ngoRepository.findOne({
+      where: { id: ngoId },
+      relations: ['followers'],
+    });
+
+    if (!ngo) {
+      throw new NotFoundException('NGO not found');
+    }
+
+    const isAlreadyFollowing = ngo.followers.some(
+      (follower) => follower.id === user.id,
+    );
+
+    if (isAlreadyFollowing) {
+      ngo.followers = ngo.followers.filter(
+        (follower) => follower.id !== user.id,
+      );
+      await this.ngoRepository.save(ngo);
+      return { message: 'Unfollowed the NGO successfully', following: false };
+    }
+
+    ngo.followers.push(user);
+    await this.ngoRepository.save(ngo);
+
+    return { message: 'Followed the NGO successfully', following: true };
+  }
+
+  // Get NGO by ID
+  async getNgoById(ngoId: string) {
+    const ngo = await this.ngoRepository
+      .createQueryBuilder('ngo')
+      .leftJoinAndSelect('ngo.user', 'user')
+      .leftJoinAndSelect('ngo.category', 'category')
+      .leftJoinAndSelect('ngo.followers', 'followers')
+      .leftJoinAndSelect('ngo.campaigns', 'campaigns')
+      .leftJoin('campaigns.volunteers', 'volunteers')
+      .where('ngo.id = :ngoId', { ngoId })
+      .select([
+        'ngo.id',
+        'ngo.name',
+        'ngo.description',
+        'ngo.location',
+        'ngo.status',
+        'ngo.createdAt',
+        'user.id',
+        'user.name',
+        'category.id',
+        'category.name',
+      ])
+      .addSelect('COUNT(DISTINCT followers.id)', 'followerCount')
+      .addSelect('COUNT(DISTINCT campaigns.id)', 'campaignCount')
+      .addSelect('COUNT(volunteers.id)', 'totalRegistrations')
+      .groupBy('ngo.id, user.id, category.id')
+      .getRawOne();
+
+    if (!ngo) {
+      throw new NotFoundException('NGO not found');
+    }
+    if (ngo.ngo_status !== NGOStatus.APPROVED) {
+      throw new ForbiddenException('Only approved NGOs can be viewed');
+    }
+
+    return {
+      id: ngo.ngo_id,
+      name: ngo.ngo_name,
+      description: ngo.ngo_description,
+      location: ngo.ngo_location,
+      status: ngo.ngo_status,
+      createdAt: ngo.ngo_createdAt,
+      owner: {
+        id: ngo.user_id,
+        name: ngo.user_name,
+      },
+      category: {
+        id: ngo.category_id,
+        name: ngo.category_name,
+      },
+      followerCount: Number(ngo.followerCount),
+      campaignCount: Number(ngo.campaignCount),
+      totalRegistrations: Number(ngo.totalRegistrations),
+    };
   }
 
   // ❌ Delete an NGO Application (Only if pending)

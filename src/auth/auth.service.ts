@@ -76,6 +76,7 @@ export class AuthService {
         email: true,
         name: true,
         password: true,
+        role: true,
         interestedCategories: true,
         interestedSubcategories: true,
       },

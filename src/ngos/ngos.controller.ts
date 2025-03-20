@@ -14,6 +14,7 @@ import { Roles } from 'src/common/decorators/roles.decorator';
 import { UserRole } from 'src/users/entities/user.entity';
 import { NGOAction } from './entities/ngo.entity';
 import { Request } from 'express';
+import { Public } from 'src/common/decorators/public.decorator';
 
 @Controller('ngos')
 export class NgosController {
@@ -53,11 +54,22 @@ export class NgosController {
     return this.ngosService.getMyNGO(req.user?.id);
   }
 
+  @Post(':ngoId/toggleFollow')
+  async toggleFollowNGO(@Req() req: Request, @Param('ngoId') ngoId: string) {
+    return this.ngosService.toggleFollowNGO(req.user?.id, ngoId);
+  }
+
   // Delete an NGO Application (Only if pending)
   @Roles([UserRole.VOLUNTEER])
   @Delete('applications/:id')
   async deleteApplication(@Req() req: Request, @Param('id') ngoId: string) {
     return this.ngosService.deleteApplication(req.user?.id, ngoId);
+  }
+
+  @Public()
+  @Get(':id')
+  async getNGO(@Param('id') ngoId: string) {
+    return this.ngosService.getNgoById(ngoId);
   }
 
   // Delete an NGO (Only if it's approved, deletes campaigns & registrations)

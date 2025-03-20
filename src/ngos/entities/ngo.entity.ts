@@ -6,6 +6,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
+  ManyToMany,
 } from 'typeorm';
 import { User } from 'src/users/entities/user.entity';
 import { Campaign } from 'src/campaigns/entities/campaign.entity';
@@ -58,6 +59,9 @@ export class NGO {
 
   @OneToMany(() => Campaign, (campaign) => campaign.ngo)
   campaigns: Campaign[];
+
+  @ManyToMany(() => User, (user) => user.followedNGOs)
+  followers: User[];
 
   @CreateDateColumn()
   createdAt: Date;

@@ -40,6 +40,9 @@ export class Campaign {
   @JoinTable()
   volunteers: User[];
 
+  @ManyToMany(() => User, (user) => user.likedCampaigns)
+  likedBy: User[];
+
   @CreateDateColumn()
   createdAt: Date;
 

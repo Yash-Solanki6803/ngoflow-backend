@@ -76,39 +76,46 @@ export class CampaignsService {
     categoryIds: number[] = [],
     subcategoryIds: number[] = [],
   ) {
-    const filters: FindOptionsWhere<Campaign> | FindOptionsWhere<Campaign>[] = {
-      title: search ? ILike(`%${search}%`) : undefined,
-      ...(location ? { ngo: { location: ILike(`%${location}%`) } } : {}),
-      ...(categoryIds.length > 0
-        ? { ngo: { category: { id: In(categoryIds) } } }
-        : {}),
-      ...(subcategoryIds.length > 0
-        ? { subcategories: { id: In(subcategoryIds) } }
-        : {}),
-    };
+    const queryBuilder = this.campaignRepository
+      .createQueryBuilder('campaign')
+      .leftJoinAndSelect('campaign.ngo', 'ngo')
+      .leftJoinAndSelect('ngo.category', 'category')
+      .leftJoinAndSelect('campaign.subcategories', 'subcategories')
+      .loadRelationCountAndMap('campaign.likeCount', 'campaign.likedBy') // Get like count
+      .loadRelationCountAndMap('campaign.volunteerCount', 'campaign.volunteers') // Get volunteer count
+      .orderBy('campaign.updatedAt', 'DESC');
 
-    return this.campaignRepository.find({
-      relations: {
-        ngo: { category: true },
-        subcategories: true,
-      },
-      where: filters,
-      select: {
-        id: true,
-        title: true,
-        description: true,
-        ngo: {
-          id: true,
-          name: true,
-          location: true,
-          category: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-      order: { updatedAt: 'DESC' },
-    });
+    if (search) {
+      queryBuilder.andWhere('campaign.title ILIKE :search', {
+        search: `%${search}%`,
+      });
+    }
+
+    if (location) {
+      queryBuilder.andWhere('ngo.location ILIKE :location', {
+        location: `%${location}%`,
+      });
+    }
+
+    if (categoryIds.length > 0) {
+      queryBuilder.andWhere('category.id IN (:...categoryIds)', {
+        categoryIds,
+      });
+    }
+
+    if (subcategoryIds.length > 0) {
+      queryBuilder.andWhere('subcategories.id IN (:...subcategoryIds)', {
+        subcategoryIds,
+      });
+    }
+
+    const campaigns = await queryBuilder.getMany();
+
+    return campaigns.map(({ likedBy, volunteers, ...campaign }) => ({
+      ...campaign,
+      likedBy: undefined, // Ensure not included
+      volunteers: undefined, // Ensure not included
+    }));
   }
 
   // Get campaigns by NGO (NGO only)
@@ -392,5 +399,56 @@ export class CampaignsService {
     }
 
     return campaign;
+  }
+
+  // Like or unlike a campaign (toggle like)
+  async toggleLikeCampaign(userId: number | undefined, campaignId: string) {
+    if (!userId) {
+      throw new ForbiddenException('Only logged-in users can like campaigns');
+    }
+
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['likedCampaigns'],
+    });
+
+    if (!user) {
+      throw new ForbiddenException('User not found');
+    }
+
+    if (user.role !== UserRole.VOLUNTEER) {
+      throw new ForbiddenException('Only volunteers can like campaigns');
+    }
+
+    const campaign = await this.campaignRepository.findOne({
+      where: { id: campaignId },
+      relations: ['likedBy'],
+    });
+
+    if (!campaign) {
+      throw new NotFoundException('Campaign not found');
+    }
+
+    const isAlreadyLiked = campaign.likedBy.some((u) => u.id === user.id);
+
+    if (isAlreadyLiked) {
+      // Unlike the campaign
+      await this.userRepository
+        .createQueryBuilder()
+        .relation(User, 'likedCampaigns')
+        .of(user.id)
+        .remove(campaign);
+
+      return { message: 'Campaign un-liked successfully' };
+    } else {
+      // Like the campaign
+      await this.userRepository
+        .createQueryBuilder()
+        .relation(User, 'likedCampaigns')
+        .of(user.id)
+        .add(campaign);
+
+      return { message: 'Campaign liked successfully' };
+    }
   }
 }
