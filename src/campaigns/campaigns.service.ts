@@ -71,6 +71,7 @@ export class CampaignsService {
 
   // Get all campaigns (Public)
   async getAllCampaigns(
+    userId?: number, // Extract from `req.user`
     search?: string,
     location?: string,
     categoryIds: number[] = [],
@@ -84,6 +85,29 @@ export class CampaignsService {
       .loadRelationCountAndMap('campaign.likeCount', 'campaign.likedBy') // Get like count
       .loadRelationCountAndMap('campaign.volunteerCount', 'campaign.volunteers') // Get volunteer count
       .orderBy('campaign.updatedAt', 'DESC');
+
+    // 🌟 If user is logged in, check their role
+    if (userId) {
+      const user = await this.userRepository.findOne({
+        where: { id: userId },
+        select: ['role'],
+      });
+
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      // 🔥 Only filter by followed NGOs if the user is a Volunteer
+      if (user.role === UserRole.VOLUNTEER) {
+        queryBuilder
+          .innerJoin(
+            'users_followed_ng_os_ngos', // ✅ Correct table name
+            'follow',
+            'follow.ngosId = ngo.id',
+          )
+          .andWhere('follow.usersId = :userId', { userId });
+      }
+    }
 
     if (search) {
       queryBuilder.andWhere('campaign.title ILIKE :search', {
@@ -139,6 +163,73 @@ export class CampaignsService {
     }
 
     return campaigns;
+  }
+
+  // Get suggested campaigns for the logged-in user
+  // Get suggested campaigns for the logged-in user
+  async getSuggestedCampaigns(userId?: number) {
+    if (!userId) return []; // User not logged in
+
+    // Fetch user's interested categories, subcategories & followed NGOs
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: [
+        'interestedCategories',
+        'interestedSubcategories',
+        'followedNGOs',
+      ],
+    });
+
+    if (!user) throw new NotFoundException('User not found');
+
+    if (user.role !== UserRole.VOLUNTEER) {
+      throw new ForbiddenException(
+        'Only volunteers can view suggested campaigns',
+      );
+    }
+
+    const categoryIds = user.interestedCategories?.map((c) => c.id) || [];
+    const subcategoryIds = user.interestedSubcategories?.map((s) => s.id) || [];
+    const followedNgoIds = user.followedNGOs?.map((ngo) => ngo.id) || [];
+
+    // If user has no interests, return []
+    if (categoryIds.length === 0 && subcategoryIds.length === 0) return [];
+
+    // Fetch campaigns matching the user's interests but exclude followed NGOs
+    const queryBuilder = this.campaignRepository
+      .createQueryBuilder('campaign')
+      .leftJoinAndSelect('campaign.ngo', 'ngo')
+      .leftJoinAndSelect('ngo.category', 'category')
+      .leftJoinAndSelect('campaign.subcategories', 'subcategories')
+      .loadRelationCountAndMap('campaign.likeCount', 'campaign.likedBy')
+      .loadRelationCountAndMap('campaign.volunteerCount', 'campaign.volunteers')
+      .orderBy('campaign.updatedAt', 'DESC');
+
+    if (categoryIds.length > 0) {
+      queryBuilder.andWhere('category.id IN (:...categoryIds)', {
+        categoryIds,
+      });
+    }
+
+    if (subcategoryIds.length > 0) {
+      queryBuilder.andWhere('subcategories.id IN (:...subcategoryIds)', {
+        subcategoryIds,
+      });
+    }
+
+    if (followedNgoIds.length > 0) {
+      queryBuilder.andWhere('ngo.id NOT IN (:...followedNgoIds)', {
+        followedNgoIds,
+      });
+    }
+
+    const campaigns = await queryBuilder.getMany();
+
+    return campaigns.map(({ likedBy, volunteers, ...campaign }) => ({
+      ...campaign,
+      likedBy: undefined,
+      volunteers: undefined,
+    }));
   }
 
   // Get a single campaign (Public)

@@ -31,6 +31,7 @@ export class CampaignsController {
   @Get()
   @Public()
   getCampaigns(
+    @Req() req: Request,
     @Query('ngoId') ngoId?: string,
     @Query('search') search?: string,
     @Query('location') location?: string,
@@ -49,6 +50,7 @@ export class CampaignsController {
       return this.campaignsService.getCampaignsByNGO(ngoId);
     }
     return this.campaignsService.getAllCampaigns(
+      req.user?.id,
       search,
       location,
       categoryIds,
@@ -68,6 +70,12 @@ export class CampaignsController {
   @Roles([UserRole.NGO])
   getVolunteersForCampaign(@Param('campaignId') campaignId: string) {
     return this.campaignsService.getVolunteersForCampaign(campaignId);
+  }
+
+  @Public()
+  @Get('/suggested')
+  getSuggestedCampaigns(@Req() req: Request) {
+    return this.campaignsService.getSuggestedCampaigns(req.user?.id);
   }
 
   // Get single campaign

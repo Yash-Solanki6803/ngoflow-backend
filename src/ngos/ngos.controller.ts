@@ -33,6 +33,12 @@ export class NgosController {
     return this.ngosService.getMyApplications(req.user?.id);
   }
 
+  @Public()
+  @Get('suggested')
+  async getSuggestedNGOs(@Req() req: Request) {
+    return this.ngosService.getSuggestedNGOs(req.user?.id);
+  }
+
   // Get pending NGO applications (Only for DEVs)
   @Roles([UserRole.DEV])
   @Get('pending-applications')

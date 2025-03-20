@@ -217,6 +217,48 @@ export class NgosService {
     return approvedNgo;
   }
 
+  // Get suggested NGOs for the logged-in user
+  async getSuggestedNGOs(userId?: number) {
+    if (!userId) return []; // User not logged in
+
+    // Fetch user's interested categories
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: {
+        interestedCategories: true,
+        followedNGOs: true,
+      },
+    });
+
+    if (!user) throw new NotFoundException('User not found');
+
+    const categoryIds = user.interestedCategories?.map((c) => c.id) || [];
+    const followedNgoIds = user.followedNGOs?.map((ngo) => ngo.id) || [];
+
+    // Build the query
+    const queryBuilder = this.ngoRepository
+      .createQueryBuilder('ngo')
+      .leftJoinAndSelect('ngo.category', 'category')
+      .where('ngo.status = :status', { status: 'approved' }) // Only approved NGOs
+      .orderBy('ngo.updatedAt', 'DESC');
+
+    // Filter NGOs by user's interested categories (if available)
+    if (categoryIds.length > 0) {
+      queryBuilder.andWhere('category.id IN (:...categoryIds)', {
+        categoryIds,
+      });
+    }
+
+    if (followedNgoIds.length > 0) {
+      queryBuilder.andWhere('ngo.id NOT IN (:...followedNgoIds)', {
+        followedNgoIds,
+      });
+    }
+
+    const ngos = await queryBuilder.getMany();
+    return ngos;
+  }
+
   async toggleFollowNGO(userId: number | undefined, ngoId: string) {
     if (!userId) {
       throw new BadRequestException('Invalid user ID');
