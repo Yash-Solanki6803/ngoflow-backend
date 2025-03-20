@@ -74,6 +74,7 @@ export class CampaignsService {
     search?: string,
     location?: string,
     categoryIds: number[] = [],
+    subcategoryIds: number[] = [],
   ) {
     const filters: FindOptionsWhere<Campaign> | FindOptionsWhere<Campaign>[] = {
       title: search ? ILike(`%${search}%`) : undefined,
@@ -81,11 +82,15 @@ export class CampaignsService {
       ...(categoryIds.length > 0
         ? { ngo: { category: { id: In(categoryIds) } } }
         : {}),
+      ...(subcategoryIds.length > 0
+        ? { subcategories: { id: In(subcategoryIds) } }
+        : {}),
     };
 
     return this.campaignRepository.find({
       relations: {
         ngo: { category: true },
+        subcategories: true,
       },
       where: filters,
       select: {

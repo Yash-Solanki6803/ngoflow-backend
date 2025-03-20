@@ -34,15 +34,25 @@ export class CampaignsController {
     @Query('search') search?: string,
     @Query('location') location?: string,
     @Query('categories') categories?: string, //1,2,3
+    @Query('subcategories') subcategories?: string, //1,2,3
   ) {
     const categoryIds = categories
       ? categories.split(',').map((id) => Number(id))
       : [];
 
+    const subcategoryIds = subcategories
+      ? subcategories.split(',').map((id) => Number(id))
+      : [];
+
     if (ngoId) {
       return this.campaignsService.getCampaignsByNGO(ngoId);
     }
-    return this.campaignsService.getAllCampaigns(search, location, categoryIds);
+    return this.campaignsService.getAllCampaigns(
+      search,
+      location,
+      categoryIds,
+      subcategoryIds,
+    );
   }
 
   // Get user's registered campaigns
